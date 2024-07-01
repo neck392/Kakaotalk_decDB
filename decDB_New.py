@@ -40,13 +40,14 @@ def save_to_file(decDB, output_filename):
     with open(output_filename, 'wb') as f:
         f.write(decDB)
 
+# reg : HKEY_CURRENT_USER\Software\Kakao\KakaoTalk\DeviceInfo\20230613-224538-107
 uuid = "54E23162-308C-D84D-AE3A-FBFD155A538E"
 modelName = "KINGSTON RBUSNS8154P3256GJ"
 serialNumber = "0026_B768_2E19_CD85."
 userId = "188939636"
-input_filename = 'chatLogs_365810316654001.edb'
+input_filename = 'chatLogs_365877719440833.edb'
 
-# reg : HKEY_CURRENT_USER\Software\Kakao\KakaoTalk\DeviceInfo\20230613-224538-107
+# reg : HKLM\System\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{c4def0e5-d3ee-4e8a-adf9-df1ba48a4f5a}
 keys = [
     "1070fe58019a4d488a6ce02d9286aabb",
     "4a8c14e149954920b2ca88ea23f6f029",
@@ -69,8 +70,12 @@ for i, hex_key in enumerate(keys):
     key = bytes.fromhex(hex_key)
     pragma = generate_pragma(uuid, modelName, serialNumber, key)
     key, iv = generate_key_and_iv(pragma, userId)
+    print(f"Number {i+1}:")
+    print(f"Pragma: {pragma}")
+    print(f"Key: {key.hex()}")
+    print(f"IV: {iv.hex()}")
     encDB = read_encrypted_data_from_file(input_filename)
     decDB = decrypt_database(key, iv, encDB)
-    output_filename = f'chatLogs_365810316654001_dec_{i+1}.db'
+    output_filename = f'chatLogs_365877719440833_dec_{i+1}.db'
     save_to_file(decDB, output_filename)
-    print(f"Decrypted data saved to: {output_filename}")
+    print(f"Decrypted data saved to: {output_filename}\n")
