@@ -5,4 +5,5 @@
 ## Requirement
 ```bash
 pip install pycryptodome
+pip install chardet
 ```
