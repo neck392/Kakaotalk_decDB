@@ -1,6 +1,6 @@
-def FindPragmas(filename):
+def FindPragmas(filePath):
     try:
-        with open(filename, 'r', encoding='utf-16') as file:
+        with open(filePath, 'r', encoding='utf-16') as file:
             content = file.read()
         
         searchStr = "=="
@@ -21,15 +21,14 @@ def FindPragmas(filename):
             idx = endIdx
 
     except FileNotFoundError:
-        print(f"File {filename} not found.")
+        print(f"File {filePath} not found.")
     except Exception as e:
         print(f"Error occurred: {e}")
     
     return pragmas
 
-# Input file path
-filename = '3000str.txt'
-pragmas = FindPragmas(filename)
+filePath = '3000str.txt' # input file path
+pragmas = FindPragmas(filePath)
 pragmas = [substring for substring in pragmas if len(substring) == 88]
 
 for substring in pragmas:
