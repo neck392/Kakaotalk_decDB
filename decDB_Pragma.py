@@ -1,68 +1,112 @@
+import chardet
 import base64
 import hashlib
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
-#def generate_pragma(uuid, modelName, serialNumber, key):
-#    iv = bytes([0] * 16)
-#    pragma = f"{uuid}|{modelName}|{serialNumber}"
-#    cipher = AES.new(key, AES.MODE_CBC, iv)
-#    encrypted_pragma = cipher.encrypt(pad(pragma.encode(), AES.block_size))
-#    hashed_pragma = hashlib.sha512(encrypted_pragma).digest()
-#    encoded_hashed_pragma = base64.b64encode(hashed_pragma)
-#    return encoded_hashed_pragma.decode()
-
-def generate_key_and_iv(pragma, userId):
+def generateKeyAndIv(pragma, userId):
     key = pragma + userId
     while len(key) < 512:
         key += key
     key = key[:512]
-    key_hash = hashlib.md5(key.encode()).digest()
-    iv = hashlib.md5(base64.b64encode(key_hash)).digest()
-    return key_hash, iv
+    keyHash = hashlib.md5(key.encode()).digest()
+    iv = hashlib.md5(base64.b64encode(keyHash)).digest()
+    return keyHash, iv
 
-def decrypt_database(key, iv, encDB):
-    decDB = b''
+def detectEncoding(filePath):
+    with open(filePath, 'rb') as file:
+        rawData = file.read(1024)
+    result = chardet.detect(rawData)
+    return result['encoding']
+
+def findPragmas(filePath):
+    encoding = detectEncoding(filePath)
+    pragmas = []
+    
+    try:
+        with open(filePath, 'r', encoding=encoding) as file:
+            content = file.read()
+        
+        searchStr = "=="
+        searchLen = len(searchStr)
+        prefixLen = 86
+
+        idx = 0
+        while idx < len(content):
+            idx = content.find(searchStr, idx)
+            if idx == -1:
+                break
+
+            startIdx = max(0, idx - prefixLen)
+            endIdx = idx + searchLen
+            pragmas.append(content[startIdx:endIdx].replace('\n', ''))            
+            idx = endIdx
+
+    except FileNotFoundError:
+        print(f"File {filePath} not found.")
+    except Exception as e:
+        print(f"Error occurred: {e}")
+    
+    return pragmas
+
+def decryptDatabase(key, iv, encDb):
+    decDb = b''
     i = 0
-    while i < len(encDB):
+    while i < len(encDb):
         cipher = AES.new(key, AES.MODE_CBC, iv)
-        decrypted_data = cipher.decrypt(encDB[i:i+4096])
-        decDB += decrypted_data
+        decryptedData = cipher.decrypt(encDb[i:i+4096])
+        decDb += decryptedData
         i += 4096
-    return decDB
+    return decDb
 
-def read_encrypted_data_from_file(input_filename):
-    with open(input_filename, 'rb') as f:
-        encDB = f.read()
-    return encDB
+def readEncryptedDataFromFile(inputFilename):
+    with open(inputFilename, 'rb') as f:
+        encDb = f.read()
+    return encDb
 
-def save_to_file(decDB, output_filename):
-    with open(output_filename, 'wb') as f:
-        f.write(decDB)
+def saveToFile(decDb, outputFilename):
+    with open(outputFilename, 'wb') as f:
+        f.write(decDb)
+
+def checkSqliteFormat(filePath):
+    with open(filePath, 'rb') as f:
+        header = f.read(128)
+    return b'SQLite' in header
 
 userId = "188939636"
-input_filename = 'chatLogs_133748894318006.edb'
+inputFilename = 'chatLogs_133748894318006.edb'
 
-# Pragma values
-pragmas = [
-    "zzbNM7FzwRS0RKih4nYIC4z5gmMzhHNQm1s+gKVhMg4RlZC4RFBE0J4evgDIrxiheX58HAAAAABJRU5ErkJggg==", 
-    "z6yh+a0Uz64sYZEs2ZfhWQ2xdt7qMhebaJrlqPdCd3KPPheAf+R+jXA0IDbPccmFhZ9i+NQzMEel7wf/bAtVtQ==", 
-    "yIdGmtEut62Sgrg6TN6aeBqCKWFqpZutBnIB1TRSZt3x1sdshZ5jfNN74UbOCvHSMW0K2YLiC4utrc2hebrI6A==", 
-    "SHS5F6dbOQQxVqBRU4pvqjbCDoh950qPcWbs+09Dpwbk\/3IDQNTvUqRnMQ0HgNBu4l+9GlyppU1Vybqwo6Kdg==", 
-    "8SHS5F6dbOQQxVqBRU4pvqjbCDoh950qPcWbs+09Dpwbk/3IDQNTvUqRnMQ0HgNBu4l+9GlyppU1Vybqwo6Kdg==", 
-    "JcuHbKLzQhwGEfKfTOe7QDZsM5wvB0YWDRzJebSdjFVoyZtzwXkpvAj1OloVyB_Z0ft1y3bwWdM3Qea5ZRBhGg==", 
-]
+filePath = '3000str.txt'
+pragmas = findPragmas(filePath)
+pragmas = [substring for substring in pragmas if len(substring) == 88]
 
-encDB = read_encrypted_data_from_file(input_filename)
+print("Found pragmas:")
+for substring in pragmas:
+    print(substring)
+
+encDb = readEncryptedDataFromFile(inputFilename)
+validSqliteFiles = []
 
 for i, pragma in enumerate(pragmas):
-    key, iv = generate_key_and_iv(pragma, userId)
+    key, iv = generateKeyAndIv(pragma, userId)
+    
+    decDb = decryptDatabase(key, iv, encDb)
+    outputFilename = f'chatLogs_133748894318006_pragma_dec_{i+1}.db'
+    saveToFile(decDb, outputFilename)
+
     print(f"Number {i+1}:")
     print(f"Pragma: {pragma}")
     print(f"Key: {key.hex()}")
     print(f"IV: {iv.hex()}")
-    
-    decDB = decrypt_database(key, iv, encDB)
-    output_filename = f'chatLogs_133748894318006_pragma_dec_{i+1}.db'
-    save_to_file(decDB, output_filename)
-    print(f"Decrypted data saved to: {output_filename}\n")
+    print(f"Saved to: {outputFilename}")
+
+    if checkSqliteFormat(outputFilename):
+        validSqliteFiles.append(outputFilename)
+    else:
+        with open(outputFilename, 'rb') as f:
+            header = f.read(128)
+        print(f"Header of {outputFilename}: {header.hex()}\n")
+
+print("\nValid SQLite3 database files:")
+for file in validSqliteFiles:
+    print(file)
