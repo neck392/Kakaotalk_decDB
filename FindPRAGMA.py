@@ -1,35 +1,61 @@
-def FindPragmas(filePath):
+import chardet
+import base64
+
+def detectEncoding(filePath):
+    with open(filePath, 'rb') as file:
+        rawData = file.read(1024)
+    result = chardet.detect(rawData)
+    return result['encoding']
+
+def isBase64(s):
     try:
-        with open(filePath, 'r', encoding='utf-16') as file:
+        return base64.b64encode(base64.b64decode(s)).decode() == s
+    except Exception:
+        return False
+
+def findPragmas(filePath):
+    encoding = detectEncoding(filePath)
+    pragmas = set() 
+    try:
+        with open(filePath, 'r', encoding=encoding) as file:
             content = file.read()
-        
+
         searchStr = "=="
         searchLen = len(searchStr)
-        prefixLen = 86
+        pragmaLen = 88
 
-        pragmas = []
         idx = 0
         while idx < len(content):
             idx = content.find(searchStr, idx)
             if idx == -1:
                 break
 
-            startIdx = max(0, idx - prefixLen)
-            endIdx = idx + searchLen
-            pragmas.append(content[startIdx:endIdx].replace('\n', ''))
-            
-            idx = endIdx
+            startIdx = idx - 1
+            filteredPrefix = []
+
+            while len(filteredPrefix) < (pragmaLen - searchLen) and startIdx >= 0:
+                if content[startIdx] not in ['\n', ' ']:
+                    filteredPrefix.insert(0, content[startIdx])
+                startIdx -= 1
+
+            filteredPrefix = ''.join(filteredPrefix)
+
+            pragma = filteredPrefix + searchStr
+
+            if len(pragma) == pragmaLen and isBase64(pragma):
+                pragmas.add(pragma)  
+
+            idx += searchLen
 
     except FileNotFoundError:
         print(f"File {filePath} not found.")
     except Exception as e:
         print(f"Error occurred: {e}")
-    
-    return pragmas
 
-filePath = '3000str.txt' # input file path
-pragmas = FindPragmas(filePath)
-pragmas = [substring for substring in pragmas if len(substring) == 88]
+    return list(pragmas)  
+
+filePath = '3000str.txt'
+pragmas = findPragmas(filePath)
 
 for substring in pragmas:
     print(substring)
