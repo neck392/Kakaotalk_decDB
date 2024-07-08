@@ -19,17 +19,22 @@ def detectEncoding(filePath):
     result = chardet.detect(rawData)
     return result['encoding']
 
+def isBase64(s):
+    try:
+        return base64.b64encode(base64.b64decode(s)).decode() == s
+    except Exception:
+        return False
+
 def findPragmas(filePath):
     encoding = detectEncoding(filePath)
-    pragmas = []
-    
+    pragmas = set() 
     try:
         with open(filePath, 'r', encoding=encoding) as file:
             content = file.read()
-        
+
         searchStr = "=="
         searchLen = len(searchStr)
-        prefixLen = 86
+        pragmaLen = 88
 
         idx = 0
         while idx < len(content):
@@ -37,17 +42,29 @@ def findPragmas(filePath):
             if idx == -1:
                 break
 
-            startIdx = max(0, idx - prefixLen)
-            endIdx = idx + searchLen
-            pragmas.append(content[startIdx:endIdx].replace('\n', ''))            
-            idx = endIdx
+            startIdx = idx - 1
+            filteredPrefix = []
+
+            while len(filteredPrefix) < (pragmaLen - searchLen) and startIdx >= 0:
+                if content[startIdx] not in ['\n', ' ']:
+                    filteredPrefix.insert(0, content[startIdx])
+                startIdx -= 1
+
+            filteredPrefix = ''.join(filteredPrefix)
+
+            pragma = filteredPrefix + searchStr
+
+            if len(pragma) == pragmaLen and isBase64(pragma):
+                pragmas.add(pragma)  
+
+            idx += searchLen
 
     except FileNotFoundError:
         print(f"File {filePath} not found.")
     except Exception as e:
         print(f"Error occurred: {e}")
-    
-    return pragmas
+
+    return list(pragmas)
 
 def decryptDatabase(key, iv, encDb):
     decDb = b''
@@ -75,10 +92,10 @@ def checkSqliteFormat(filePath):
 
 userId = "188939636"
 inputFilename = 'chatLogs_133748894318006.edb'
-
 filePath = '3000str.txt'
+
 pragmas = findPragmas(filePath)
-pragmas = [substring for substring in pragmas if len(substring) == 88]
+#pragmas = [substring for substring in pragmas if len(substring) == 88]
 
 print("Found pragmas:")
 for substring in pragmas:
