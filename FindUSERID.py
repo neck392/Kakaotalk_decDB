@@ -33,21 +33,29 @@ def readUserIdNumbers(filePath, encoding):
     userIdNumbers = [num for num in userIdNumbers if num != '0']
     return userIdNumbers
 
-def findMostCommonNumber(ntNumbers, equalNumbers, userIdNumbers):
-    ntCount = Counter(ntNumbers)
-    equalCount = Counter(equalNumbers)
+def readFromNumbers(filePath, encoding):
+    fromNumbers = []
+    with open(filePath, 'r', encoding=encoding) as file:
+        for line in file:
+            fromNumbers.extend(re.findall(r'"from":"(\d{5,10})"', line))
+    fromNumbers = [num for num in fromNumbers if num != '0']
+    return fromNumbers
+
+def findMostCommonNumber(*numberLists):
+    validLists = [Counter(numbers) for numbers in numberLists if numbers]
+
+    if not validLists:
+        return None, 0, 0
     
-    if userIdNumbers:
-        userIdCount = Counter(userIdNumbers)
-        commonNumbers = ntCount & equalCount & userIdCount
-        combinedCount = {num: ntCount[num] + equalCount[num] + userIdCount[num] for num in commonNumbers}
-    else:
-        commonNumbers = ntCount & equalCount
-        combinedCount = {num: ntCount[num] + equalCount[num] for num in commonNumbers}
+    commonNumbers = validLists[0]
+    for count in validLists[1:]:
+        commonNumbers &= count
+    
+    combinedCount = {num: sum(count[num] for count in validLists) for num in commonNumbers}
     
     filteredCount = {num: count for num, count in combinedCount.items() if 5 <= len(num) <= 10}
     
-    totalCount = len(ntNumbers) + len(equalNumbers) + len(userIdNumbers)
+    totalCount = sum(len(numbers) for numbers in numberLists)
     
     if filteredCount:
         mostCommonNumber = max(filteredCount, key=filteredCount.get)
@@ -60,7 +68,7 @@ def findMostCommonNumber(ntNumbers, equalNumbers, userIdNumbers):
     
     return mostCommonNumber, mostCommonCount, probability
 
-filePath = '3000str.txt' # input file path
+filePath = '3000str.txt'
 
 detectedEncoding = detectEncoding(filePath)
 print(f"Encoding format: {detectedEncoding}")
@@ -77,6 +85,9 @@ userIdResult = readUserIdNumbers(filePath, detectedEncoding)
 print("User ID Processed result:")
 print(userIdResult)
 
-mostCommonNumber, mostCommonCount, probability = findMostCommonNumber(ntResult, equalResult, userIdResult)
-print()
-print(f"Find USERID: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})")
+fromResult = readFromNumbers(filePath, detectedEncoding)
+print("From Processed result:")
+print(fromResult)
+
+mostCommonNumber, mostCommonCount, probability = findMostCommonNumber(ntResult, equalResult, userIdResult, fromResult)
+print(f"\nFind most common number: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})")
