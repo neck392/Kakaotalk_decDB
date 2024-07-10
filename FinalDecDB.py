@@ -71,6 +71,19 @@ def findMostCommonNumber(*numberLists):
         probability = 0
     
     return mostCommonNumber, mostCommonCount, probability
+
+def findFallbackNumber(fromNumbers, userIdNumbers):
+    fromCounter = Counter(fromNumbers)
+    userIdCounter = Counter(userIdNumbers)
+    
+    commonNumbers = fromCounter & userIdCounter
+    
+    if commonNumbers:
+        mostCommonNumber = commonNumbers.most_common(1)[0]
+        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
+    else:
+        mostCommonNumber = fromCounter.most_common(1)[0]
+        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
 # ----------------------------------------------------------------------
 
 def generateKeyAndIv(pragma, userId):
@@ -155,33 +168,50 @@ def checkSqliteFormat(filePath):
 
 #------------------INPUT DATA-----------------------------
 inputFilename = "chatLogs_133748894318006.edb"
-filePath = '2820str.txt'
+filePath = 'pid2820str.txt'
 #------------------INPUT DATA-----------------------------
 
 detectedEncoding = detectEncoding(filePath)
 print(f"Encoding format: {detectedEncoding}")
-pragmas = findPragmas(filePath)
 
 ntResult = readNtNumbers(filePath, detectedEncoding)
-print("\nNT Processed result:")
+print("NT Processed result:")
 print(ntResult)
 
 equalResult = readEqualNumbers(filePath, detectedEncoding)
-print("\nEqual Processed result:")
+print("Equal Processed result:")
 print(equalResult)
 
 userIdResult = readUserIdNumbers(filePath, detectedEncoding)
-print("\nUser ID Processed result:")
+print("User ID Processed result:")
 print(userIdResult)
 
 fromResult = readFromNumbers(filePath, detectedEncoding)
-print("\nFrom Processed result:")
+print("From Processed result:")
 print(fromResult)
 
 mostCommonNumber, mostCommonCount, probability = findMostCommonNumber(ntResult, equalResult, userIdResult, fromResult)
-userId = mostCommonNumber
-print(f"\nFind most common number: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})")
 
+if not mostCommonNumber:
+    mostCommonNumber, mostCommonCount, probability = findFallbackNumber(fromResult, userIdResult)
+
+    if not mostCommonNumber:
+        if fromResult:
+            fromCounter = Counter(fromResult)
+            mostCommonNumber, mostCommonCount = fromCounter.most_common(1)[0]
+            probability = mostCommonCount / len(fromResult)
+        elif userIdResult:
+            userIdCounter = Counter(userIdResult)
+            mostCommonNumber, mostCommonCount = userIdCounter.most_common(1)[0]
+            probability = mostCommonCount / len(userIdResult)
+        else:
+            mostCommonNumber, mostCommonCount, probability = None, 0, 0
+
+userId = mostCommonNumber
+
+print(f"\nFound UserId: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})\n")
+
+pragmas = findPragmas(filePath)
 print("\nFound pragmas:")
 for substring in pragmas:
     print(substring)
