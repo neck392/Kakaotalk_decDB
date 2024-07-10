@@ -87,19 +87,19 @@ def saveToFile(decDb, outputFilename):
 
 def checkSqliteFormat(filePath):
     with open(filePath, 'rb') as f:
-        header = f.read(128)
-    return b'SQLite' in header
+        header = f.read(16)
+    return b'SQLite format 3\x00' in header
 
 userId = "188939636"
-inputFilename = 'chatLogs_133748894318006.edb'
-filePath = '3000str.txt'
+inputFilename = "chatLogs_133748894318006.edb"
+filePath = '2820str.txt'
 
 pragmas = findPragmas(filePath)
-#pragmas = [substring for substring in pragmas if len(substring) == 88]
 
 print("Found pragmas:")
 for substring in pragmas:
     print(substring)
+print()
 
 encDb = readEncryptedDataFromFile(inputFilename)
 validSqliteFiles = []
@@ -111,17 +111,22 @@ for i, pragma in enumerate(pragmas):
     outputFilename = f'chatLogs_133748894318006_pragma_dec_{i+1}.db'
     saveToFile(decDb, outputFilename)
 
-    print(f"Number {i+1}:")
-    print(f"Pragma: {pragma}")
-    print(f"Key: {key.hex()}")
-    print(f"IV: {iv.hex()}")
-    print(f"Saved to: {outputFilename}")
 
     if checkSqliteFormat(outputFilename):
         validSqliteFiles.append(outputFilename)
+        print(f"Number {i+1}:")
+        print(f"Pragma: {pragma}")
+        print(f"Key: {key.hex()}")
+        print(f"IV: {iv.hex()}")
+        print(f"Saved to: {outputFilename}\n")
     else:
         with open(outputFilename, 'rb') as f:
-            header = f.read(128)
+            header = f.read(16)
+        print(f"Number {i+1}:")
+        print(f"Pragma: {pragma}")
+        print(f"Key: {key.hex()}")
+        print(f"IV: {iv.hex()}")
+        print(f"Saved to: {outputFilename}")
         print(f"Header of {outputFilename}: {header.hex()}\n")
 
 print("\nValid SQLite3 database files:")
