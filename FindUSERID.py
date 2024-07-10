@@ -68,7 +68,20 @@ def findMostCommonNumber(*numberLists):
     
     return mostCommonNumber, mostCommonCount, probability
 
-filePath = '3000str.txt'
+def findFallbackNumber(fromNumbers, userIdNumbers):
+    fromCounter = Counter(fromNumbers)
+    userIdCounter = Counter(userIdNumbers)
+    
+    commonNumbers = fromCounter & userIdCounter
+    
+    if commonNumbers:
+        mostCommonNumber = commonNumbers.most_common(1)[0]
+        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
+    else:
+        mostCommonNumber = fromCounter.most_common(1)[0]
+        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
+
+filePath = '3000str.txt' 
 
 detectedEncoding = detectEncoding(filePath)
 print(f"Encoding format: {detectedEncoding}")
@@ -90,5 +103,22 @@ print("From Processed result:")
 print(fromResult)
 
 mostCommonNumber, mostCommonCount, probability = findMostCommonNumber(ntResult, equalResult, userIdResult, fromResult)
+
+if not mostCommonNumber:
+    mostCommonNumber, mostCommonCount, probability = findFallbackNumber(fromResult, userIdResult)
+
+    if not mostCommonNumber:
+        if fromResult:
+            fromCounter = Counter(fromResult)
+            mostCommonNumber, mostCommonCount = fromCounter.most_common(1)[0]
+            probability = mostCommonCount / len(fromResult)
+        elif userIdResult:
+            userIdCounter = Counter(userIdResult)
+            mostCommonNumber, mostCommonCount = userIdCounter.most_common(1)[0]
+            probability = mostCommonCount / len(userIdResult)
+        else:
+            mostCommonNumber, mostCommonCount, probability = None, 0, 0
+
 userId = mostCommonNumber
-print(f"\nFind most common number: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})")
+
+print(f"\nFind UserId: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})")
