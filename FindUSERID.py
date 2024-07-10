@@ -90,4 +90,5 @@ print("From Processed result:")
 print(fromResult)
 
 mostCommonNumber, mostCommonCount, probability = findMostCommonNumber(ntResult, equalResult, userIdResult, fromResult)
+userId = mostCommonNumber
 print(f"\nFind most common number: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})")
