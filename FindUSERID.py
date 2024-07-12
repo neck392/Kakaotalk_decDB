@@ -41,47 +41,52 @@ def readFromNumbers(filePath, encoding):
     fromNumbers = [num for num in fromNumbers if num != '0']
     return fromNumbers
 
-def findMostCommonNumber(*numberLists):
-    validLists = [Counter(numbers) for numbers in numberLists if numbers]
+def findMostCommonNumberWithWeights(totalNumbers, weights, *numberLists):
+    combinedCounts = Counter()
+    for key, numbers in zip(weights.keys(), numberLists):
+        if numbers:
+            weightedCounts = Counter({num: count * weights[key] for num, count in Counter(numbers).items()})
+            combinedCounts.update(weightedCounts)
 
-    if not validLists:
+    if not combinedCounts:
         return None, 0, 0
-    
-    commonNumbers = validLists[0]
-    for count in validLists[1:]:
-        commonNumbers &= count
-    
-    combinedCount = {num: sum(count[num] for count in validLists) for num in commonNumbers}
-    
-    filteredCount = {num: count for num, count in combinedCount.items() if 5 <= len(num) <= 10}
-    
-    totalCount = sum(len(numbers) for numbers in numberLists)
-    
-    if filteredCount:
-        mostCommonNumber = max(filteredCount, key=filteredCount.get)
-        mostCommonCount = filteredCount[mostCommonNumber]
-        probability = mostCommonCount / totalCount
-    else:
-        mostCommonNumber = None
-        mostCommonCount = 0
-        probability = 0
-    
-    return mostCommonNumber, mostCommonCount, probability
 
-def findFallbackNumber(fromNumbers, userIdNumbers):
+    mostCommonNumber, weightedCount = combinedCounts.most_common(1)[0]
+    totalCount = sum(Counter(totalNumbers).values())
+    actualCount = Counter(totalNumbers)[mostCommonNumber]
+    probability = actualCount / totalCount if totalCount else 0
+
+    return mostCommonNumber, actualCount, probability
+
+def findFallbackNumber(totalNumbers, weights, fromNumbers, userIdNumbers):
     fromCounter = Counter(fromNumbers)
     userIdCounter = Counter(userIdNumbers)
-    
     commonNumbers = fromCounter & userIdCounter
-    
+
     if commonNumbers:
         mostCommonNumber = commonNumbers.most_common(1)[0]
-        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
+        totalCount = sum(Counter(totalNumbers).values())
+        actualCount = Counter(totalNumbers)[mostCommonNumber[0]]
+        probability = actualCount / totalCount if totalCount else 0
+        return mostCommonNumber[0], actualCount, probability
     else:
         mostCommonNumber = fromCounter.most_common(1)[0]
-        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
+        totalCount = sum(Counter(totalNumbers).values())
+        actualCount = Counter(totalNumbers)[mostCommonNumber[0]]
+        probability = actualCount / totalCount if totalCount else 0
+        return mostCommonNumber[0], actualCount, probability
 
-filePath = '3000str.txt' 
+def findMostCommonInCombinedLists(totalNumbers, weights, *numberLists):
+    combinedCounter = Counter()
+    for numbers in numberLists:
+        combinedCounter.update(Counter(numbers))
+    mostCommonNumber, mostCommonCount = combinedCounter.most_common(1)[0]
+    totalCount = sum(Counter(totalNumbers).values())
+    actualCount = Counter(totalNumbers)[mostCommonNumber]
+    probability = actualCount / totalCount if totalCount else 0
+    return mostCommonNumber, actualCount, probability
+
+filePath = 'pid2820str.txt'  # input filepath
 
 detectedEncoding = detectEncoding(filePath)
 print(f"Encoding format: {detectedEncoding}")
@@ -102,22 +107,48 @@ fromResult = readFromNumbers(filePath, detectedEncoding)
 print("From Processed result:")
 print(fromResult)
 
-mostCommonNumber, mostCommonCount, probability = findMostCommonNumber(ntResult, equalResult, userIdResult, fromResult)
+weights = {
+    'from': 0.9,
+    'user_id': 0.6,
+    'nt': 0.15,
+    'equal': 0.1
+}
 
-if not mostCommonNumber:
-    mostCommonNumber, mostCommonCount, probability = findFallbackNumber(fromResult, userIdResult)
+totalNumbers = fromResult + userIdResult + ntResult + equalResult
 
-    if not mostCommonNumber:
+commonNumbers = set(fromResult) & set(userIdResult) & set(ntResult) & set(equalResult)
+if commonNumbers:
+    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, list(commonNumbers), list(commonNumbers), list(commonNumbers), list(commonNumbers))
+else:
+    commonNumbers = set(fromResult) & set(userIdResult)
+    if commonNumbers:
+        mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, list(commonNumbers), list(commonNumbers))
+    else:
         if fromResult:
-            fromCounter = Counter(fromResult)
-            mostCommonNumber, mostCommonCount = fromCounter.most_common(1)[0]
-            probability = mostCommonCount / len(fromResult)
-        elif userIdResult:
-            userIdCounter = Counter(userIdResult)
-            mostCommonNumber, mostCommonCount = userIdCounter.most_common(1)[0]
-            probability = mostCommonCount / len(userIdResult)
+            mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, fromResult, [], [], [])
         else:
-            mostCommonNumber, mostCommonCount, probability = None, 0, 0
+            commonNumbers = set(ntResult) & set(equalResult) & set(userIdResult)
+            if commonNumbers:
+                mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], list(commonNumbers), list(commonNumbers), list(commonNumbers))
+            else:
+                commonNumbers = set(userIdResult) & set(ntResult)
+                if commonNumbers:
+                    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], list(commonNumbers), list(commonNumbers), [])
+                else:
+                    commonNumbers = set(userIdResult) & set(equalResult)
+                    if commonNumbers:
+                        mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], list(commonNumbers), [], list(commonNumbers))
+                    else:
+                        if userIdResult:
+                            mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], userIdResult, [], [])
+                        else:
+                            if ntResult:
+                                mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], [], ntResult, [])
+                            else:
+                                if equalResult:
+                                    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], [], [], equalResult)
+                                else:
+                                    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, fromResult, userIdResult, ntResult, equalResult)
 
 userId = mostCommonNumber
 
