@@ -95,7 +95,6 @@ inputFilename = "chatLogs_133748894318006.edb"
 filePath = '2820str.txt'
 
 pragmas = findPragmas(filePath)
-#pragmas = [substring for substring in pragmas if len(substring) == 88]
 
 print("Found pragmas:")
 for substring in pragmas:
