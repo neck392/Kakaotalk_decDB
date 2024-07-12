@@ -1,3 +1,4 @@
+import winreg
 import re
 import chardet
 import base64
@@ -10,8 +11,9 @@ from Crypto.Util.Padding import pad, unpad
 def detectEncoding(filePath):
     with open(filePath, 'rb') as file:
         rawData = file.read(1024)
-    result = chardet.detect(rawData)
-    return result['encoding']
+        encodingInfo = chardet.detect(rawData)
+        encoding = encodingInfo['encoding']
+    return encoding
 
 def readNtNumbers(filePath, encoding):
     ntNumbers = []
@@ -33,7 +35,7 @@ def readUserIdNumbers(filePath, encoding):
     userIdNumbers = []
     with open(filePath, 'r', encoding=encoding) as file:
         for line in file:
-            userIdNumbers.extend(re.findall(r'"user_id":(\d{5,10})', line))  
+            userIdNumbers.extend(re.findall(r'"user_id":(\d{5,10})', line))
     userIdNumbers = [num for num in userIdNumbers if num != '0']
     return userIdNumbers
 
@@ -41,49 +43,54 @@ def readFromNumbers(filePath, encoding):
     fromNumbers = []
     with open(filePath, 'r', encoding=encoding) as file:
         for line in file:
-            fromNumbers.extend(re.findall(r'"from":"(\d{5,10})"', line))  
+            fromNumbers.extend(re.findall(r'"from":"(\d{5,10})"', line))
     fromNumbers = [num for num in fromNumbers if num != '0']
     return fromNumbers
 
-def findMostCommonNumber(*numberLists):
-    validLists = [Counter(numbers) for numbers in numberLists if numbers]
+def findMostCommonNumberWithWeights(totalNumbers, weights, *numberLists):
+    combinedCounts = Counter()
+    for key, numbers in zip(weights.keys(), numberLists):
+        if numbers:
+            weightedCounts = Counter({num: count * weights[key] for num, count in Counter(numbers).items()})
+            combinedCounts.update(weightedCounts)
 
-    if not validLists:
+    if not combinedCounts:
         return None, 0, 0
 
-    commonNumbers = validLists[0]
-    for count in validLists[1:]:
-        commonNumbers &= count
+    mostCommonNumber, weightedCount = combinedCounts.most_common(1)[0]
+    totalCount = sum(Counter(totalNumbers).values())
+    actualCount = Counter(totalNumbers)[mostCommonNumber]
+    probability = actualCount / totalCount if totalCount else 0
 
-    combinedCount = {num: sum(count[num] for count in validLists) for num in commonNumbers}
+    return mostCommonNumber, actualCount, probability
 
-    filteredCount = {num: count for num, count in combinedCount.items() if 5 <= len(num) <= 10}
-
-    totalCount = sum(len(numbers) for numbers in numberLists)
-
-    if filteredCount:
-        mostCommonNumber = max(filteredCount, key=filteredCount.get)
-        mostCommonCount = filteredCount[mostCommonNumber]
-        probability = mostCommonCount / totalCount
-    else:
-        mostCommonNumber = None
-        mostCommonCount = 0
-        probability = 0
-
-    return mostCommonNumber, mostCommonCount, probability
-
-def findFallbackNumber(fromNumbers, userIdNumbers):
+def findFallbackNumber(totalNumbers, weights, fromNumbers, userIdNumbers):
     fromCounter = Counter(fromNumbers)
     userIdCounter = Counter(userIdNumbers)
-
     commonNumbers = fromCounter & userIdCounter
 
     if commonNumbers:
         mostCommonNumber = commonNumbers.most_common(1)[0]
-        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
+        totalCount = sum(Counter(totalNumbers).values())
+        actualCount = Counter(totalNumbers)[mostCommonNumber[0]]
+        probability = actualCount / totalCount if totalCount else 0
+        return mostCommonNumber[0], actualCount, probability
     else:
         mostCommonNumber = fromCounter.most_common(1)[0]
-        return mostCommonNumber[0], mostCommonNumber[1], mostCommonNumber[1] / sum(fromCounter.values())
+        totalCount = sum(Counter(totalNumbers).values())
+        actualCount = Counter(totalNumbers)[mostCommonNumber[0]]
+        probability = actualCount / totalCount if totalCount else 0
+        return mostCommonNumber[0], actualCount, probability
+
+def findMostCommonInCombinedLists(totalNumbers, weights, *numberLists):
+    combinedCounter = Counter()
+    for numbers in numberLists:
+        combinedCounter.update(Counter(numbers))
+    mostCommonNumber, mostCommonCount = combinedCounter.most_common(1)[0]
+    totalCount = sum(Counter(totalNumbers).values())
+    actualCount = Counter(totalNumbers)[mostCommonNumber]
+    probability = actualCount / totalCount if totalCount else 0
+    return mostCommonNumber, actualCount, probability
 # ----------------------------------------------------------------------
 
 def generateKeyAndIv(pragma, userId):
@@ -142,6 +149,42 @@ def findPragmas(filePath):
 
     return list(pragmas)
 
+def getKakaoTalkDevId():
+    devIdList = []
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Kakao\KakaoTalk\DeviceInfo")
+        
+        i = 0
+        while True:
+            try:
+                subkeyName = winreg.EnumKey(key, i)
+                subkeyPath = f"Software\Kakao\KakaoTalk\DeviceInfo\{subkeyName}"
+                
+                subkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkeyPath)
+                
+                devId, regType = winreg.QueryValueEx(subkey, "dev_id")
+                devIdList.append(devId.strip())
+                
+                winreg.CloseKey(subkey)
+                i += 1
+            except OSError:
+                break
+        
+        winreg.CloseKey(key)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    return devIdList
+
+def findFinalPragma(devIds, pragmas):
+    for pragma in pragmas:
+        for devId in devIds:
+            if devId in pragma:
+                print(f"\nFind final pragma: {pragma}\n")
+                return pragma
+    print("No matching pragma found.")
+    return None
+
 def decryptDatabase(key, iv, encDb):
     decDb = b''
     i = 0
@@ -190,26 +233,52 @@ fromResult = readFromNumbers(filePath, detectedEncoding)
 print("From Processed result:")
 print(fromResult)
 
-mostCommonNumber, mostCommonCount, probability = findMostCommonNumber(ntResult, equalResult, userIdResult, fromResult)
+weights = {
+    'from': 0.9,
+    'user_id': 0.6,
+    'nt': 0.15,
+    'equal': 0.1
+}
 
-if not mostCommonNumber:
-    mostCommonNumber, mostCommonCount, probability = findFallbackNumber(fromResult, userIdResult)
+totalNumbers = fromResult + userIdResult + ntResult + equalResult
 
-    if not mostCommonNumber:
+commonNumbers = set(fromResult) & set(userIdResult) & set(ntResult) & set(equalResult)
+if commonNumbers:
+    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, list(commonNumbers), list(commonNumbers), list(commonNumbers), list(commonNumbers))
+else:
+    commonNumbers = set(fromResult) & set(userIdResult)
+    if commonNumbers:
+        mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, list(commonNumbers), list(commonNumbers))
+    else:
         if fromResult:
-            fromCounter = Counter(fromResult)
-            mostCommonNumber, mostCommonCount = fromCounter.most_common(1)[0]
-            probability = mostCommonCount / len(fromResult)
-        elif userIdResult:
-            userIdCounter = Counter(userIdResult)
-            mostCommonNumber, mostCommonCount = userIdCounter.most_common(1)[0]
-            probability = mostCommonCount / len(userIdResult)
+            mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, fromResult, [], [], [])
         else:
-            mostCommonNumber, mostCommonCount, probability = None, 0, 0
+            commonNumbers = set(ntResult) & set(equalResult) & set(userIdResult)
+            if commonNumbers:
+                mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], list(commonNumbers), list(commonNumbers), list(commonNumbers))
+            else:
+                commonNumbers = set(userIdResult) & set(ntResult)
+                if commonNumbers:
+                    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], list(commonNumbers), list(commonNumbers), [])
+                else:
+                    commonNumbers = set(userIdResult) & set(equalResult)
+                    if commonNumbers:
+                        mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], list(commonNumbers), [], list(commonNumbers))
+                    else:
+                        if userIdResult:
+                            mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], userIdResult, [], [])
+                        else:
+                            if ntResult:
+                                mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], [], ntResult, [])
+                            else:
+                                if equalResult:
+                                    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, [], [], [], equalResult)
+                                else:
+                                    mostCommonNumber, mostCommonCount, probability = findMostCommonNumberWithWeights(totalNumbers, weights, fromResult, userIdResult, ntResult, equalResult)
 
 userId = mostCommonNumber
 
-print(f"\nFound UserId: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})\n")
+print(f"\nFind UserId: {mostCommonNumber} (Frequency: {mostCommonCount}, Probability: {probability:.2%})")
 
 pragmas = findPragmas(filePath)
 print("\nFound pragmas:")
@@ -217,12 +286,15 @@ for substring in pragmas:
     print(substring)
 print()
 
+devIds = getKakaoTalkDevId()
+findFinalPragma(devIds, pragmas)
+
 encDb = readEncryptedDataFromFile(inputFilename)
 validSqliteFiles = []
 
 for i, pragma in enumerate(pragmas):
     key, iv = generateKeyAndIv(pragma, userId)
-
+    
     decDb = decryptDatabase(key, iv, encDb)
     outputFilename = f'chatLogs_133748894318006_pragma_dec_{i+1}.db'
     saveToFile(decDb, outputFilename)
