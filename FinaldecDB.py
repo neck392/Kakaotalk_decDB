@@ -209,10 +209,10 @@ def checkSqliteFormat(filePath):
         header = f.read(16)
     return b'SQLite format 3\x00' in header
 
-#------------------INPUT DATA-----------------------------
-inputFilename = "chatLogs_133748894318006.edb"
+#------------------INPUT DATA---------------------------
+inputFilename = "chatListInfo.edb"
 filePath = 'pid2820str.txt'
-#------------------INPUT DATA-----------------------------
+#------------------INPUT DATA---------------------------
 
 detectedEncoding = detectEncoding(filePath)
 print(f"Encoding format: {detectedEncoding}")
@@ -296,7 +296,7 @@ for i, pragma in enumerate(pragmas):
     key, iv = generateKeyAndIv(pragma, userId)
     
     decDb = decryptDatabase(key, iv, encDb)
-    outputFilename = f'chatLogs_133748894318006_pragma_dec_{i+1}.db'
+    outputFilename = f'{inputFilename}_dec_{i+1}.db'
     saveToFile(decDb, outputFilename)
 
     if checkSqliteFormat(outputFilename):
