@@ -6,4 +6,5 @@
 ```bash
 pip install pycryptodome
 pip install chardet
+pip install winreg
 ```
